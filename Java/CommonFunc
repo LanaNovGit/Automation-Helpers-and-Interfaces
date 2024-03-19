@@ -1,0 +1,504 @@
+public class CommonFunc{
+    
+    public List<string> GetParticularValuesFromXML(string tagName, string xml)
+        {
+            List<string> listOfValues = new List<string>();
+            XmlDocument xmlDoc = new XmlDocument();
+            xmlDoc.LoadXml(xml);
+            XmlNodeList nodeList = xmlDoc.GetElementsByTagName(tagName);
+            string value = string.Empty;
+
+            foreach (XmlNode node in nodeList)
+            {
+                listOfValues.Add(node.InnerText);
+            }
+
+            return listOfValues;
+        }
+
+        public void InvokeMethod(object page, string field)
+        {
+            Type type = page.GetType();
+            MethodInfo getElementMethod = type.GetMethod(field);
+            if (getElementMethod != null)
+            {
+                getElementMethod.Invoke(page, null);
+            }
+        }
+
+        public bool IsSorted(List<object> Items, bool desc = true)
+        {
+            List<object> copyList = new List<object>();
+            Items.ForEach(x => copyList.Add(x));
+            copyList = copyList.OrderBy(x => x).ToList();
+            Items = Items.OrderBy(x => x).ToList();
+
+            if (desc == true)
+            {
+                copyList.Reverse();
+            }
+
+            for (int i = 0; i < copyList.Count; i++)
+            {
+                if (copyList[i].ToString().ToLower() != Items[i].ToString().ToLower())
+                    return false;
+            }
+            return true;
+        }
+
+        public StringBuilder ValidateTextField(object page, string field, string expectedText, IWebDriver driver)
+        {
+            var Field = GetField(page, field);
+            if (Field != null)
+            {
+                return new BrowserHelper(driver).VerifyTextFieldValue((OpenQA.Selenium.IWebElement)Field, expectedText);
+            }
+            return new StringBuilder(string.Format("{0} field was not found in {1} class", field, page));
+        }
+
+         public bool SetEquals<T>(IEnumerable<T> first, IEnumerable<T> second, IEqualityComparer<T> comparer)
+        {
+            return new HashSet<T>(second, comparer ?? EqualityComparer<T>.Default)
+                .SetEquals(first);
+        }
+
+        public string RandomString(int size)
+        {
+            StringBuilder builder = new StringBuilder();
+            Random random = new Random();
+            char ch;
+            for (int i = 0; i < size; i++)
+            {
+                int num = random.Next(0, 26);
+                ch = (char)('a' + num);
+                builder.Append(ch);
+            }
+
+            return builder.ToString();
+        }
+
+        public long GetRndNumber(int length)
+        {
+            string number = string.Empty;
+            string phone = string.Empty;
+            Random random = new Random();
+            for (int i = 0; i < length; i++)
+            {
+                number += random.Next(0, 9);
+            }
+            return long.Parse(number);
+        }
+
+       public bool IsSorted(List<object> Items, bool desc = true)
+        {
+            List<object> copyList = new List<object>();
+            foreach (var item in Items)
+            {
+                copyList.Add(item);
+            }
+
+            copyList.Sort();
+
+            if (desc == true)
+            {
+                copyList.Reverse();
+            }
+
+            for (int i = 0; i < copyList.Count; i++)
+            {
+                if (copyList[i].ToString().ToLower() != Items[i].ToString().ToLower())
+                    return false;
+            }
+            return true;
+        }
+
+         public bool IsSortedDesc(List<string> Items)
+        {
+            List<object> copyList = new List<object>();
+            foreach (var item in Items)
+            {
+                copyList.Add(item);
+            }
+
+            //copyList.Sort();
+            copyList.Reverse();
+            for (int i = 1; i < copyList.Count; i++)
+            {
+                if (copyList[i].ToString() != Items[i].ToString())
+                    return false;
+            }
+            return true;
+        }
+
+        public void DeleteFile(string FileType, string FileName)
+        {
+            string Path = System.Environment.GetEnvironmentVariable("...") + "\\Downloads";
+            string[] filePaths = Directory.GetFiles(Path, FileType);
+            foreach (string filePath in filePaths)
+            {
+                FileInfo ThisFile = new FileInfo(filePath);
+                if (ThisFile.Name == FileName)
+                {
+                    File.Delete(filePath);
+                    return;
+                }
+
+            }
+        }
+
+        public bool FileExist(string FileType)
+        {
+            bool Exist = false;
+            //string Path = "C:\\Downloads";
+            string Path = System.Environment.GetEnvironmentVariable("...") + "\\Downloads";
+            string[] filePaths = Directory.GetFiles(Path, FileType);
+            foreach (string filePath in filePaths)
+            {
+                FileInfo ThisFile = new FileInfo(filePath);
+                if (ThisFile.LastWriteTime.ToShortTimeString() == DateTime.Now.ToShortTimeString() ||
+                    ThisFile.LastWriteTime.AddMinutes(1).ToShortTimeString() == DateTime.Now.ToShortTimeString() ||
+                    ThisFile.LastWriteTime.AddMinutes(2).ToShortTimeString() == DateTime.Now.ToShortTimeString() ||
+                    ThisFile.LastWriteTime.AddMinutes(3).ToShortTimeString() == DateTime.Now.ToShortTimeString())
+                    Exist = true;
+                File.Delete(filePath);
+            }
+
+            return Exist;
+        }
+
+        public string GetLastFilePath(string FileType)
+        {
+            DateTime UpdatedDateTime = new DateTime();
+            string UpdatedPath = string.Empty;
+            string folder = System.Environment.GetEnvironmentVariable("USERPROFILE") + "\\Downloads";
+            string[] filePaths = Directory.GetFiles(folder, FileType);
+            foreach (string filePath in filePaths)
+            {
+                FileInfo ThisFile = new FileInfo(filePath);
+                if (UpdatedDateTime.Year == 1)
+                    UpdatedDateTime = ThisFile.LastWriteTime;
+                else if (UpdatedDateTime > ThisFile.LastWriteTime)
+                    UpdatedDateTime = ThisFile.LastWriteTime;
+            }
+            foreach (string filePath in filePaths)
+            {
+                FileInfo ThisFile = new FileInfo(filePath);
+                if (ThisFile.LastWriteTime == UpdatedDateTime)
+                    UpdatedPath = filePath;
+            }
+            return UpdatedPath;
+        }
+
+        public string ConvertStringArrayToStringJoin(string[] array)
+        {
+            // Use string Join to concatenate the string elements.
+            string result = string.Join(",", array);
+            return result;
+        }
+
+        public string[] GetarrayFromDictionary(Dictionary<string, string> dict)
+        {
+            string[] foos = new string[dict.Count];
+            dict.Values.CopyTo(foos, 0);
+            return foos;
+        }
+
+        public void WaitForURL11(Browser browser, string url)
+        {
+            browser.BrowserHelper.WaitForUrl(browser._driver, url, 1, 30);
+        }
+
+        public void DeleteFiles(string FileType)
+        {
+            string Path = System.Environment.GetEnvironmentVariable("USERPROFILE") + "\\Downloads";
+            string[] filePaths = Directory.GetFiles(Path, FileType);
+            foreach (string filePath in filePaths)
+            {
+                File.Delete(filePath);
+            }
+        }
+
+        public string MakeOneLine(string value)
+        {
+            return value.Replace("r\n\r\n", "");
+        }
+
+        public string ConvertStringToLower(string value)
+        {
+            return value.ToLower();
+        }
+
+        public string DeleteAllSpaces(string value)
+        {
+            return value.Replace(" ", "");
+        }
+
+        public void RefreshPageF5(double sleepSeconds, Browser browser)
+        {
+            browser.BrowserHelper.RefreshBrowserCtrlF5(browser._driver, sleepSeconds);
+        }
+
+        public void RefreshPage(Browser browser, double sleepSeconds)
+        {
+            browser.BrowserHelper.RefreshBrowser(browser._driver, sleepSeconds);
+        }
+
+        public bool ValidateUrl(string PartialUrl, Browser browser, int timeinSeconds = 0)
+        {
+            browser.BrowserHelper.WaitForUrl(browser._driver, PartialUrl, 1, timeinSeconds);
+            string URL = browser._driver.Url;
+            if (URL.Contains(PartialUrl))
+                return true;
+            return false;
+        }
+
+        public bool WasURLopened(string PartialURL, Browser browser)
+        {
+            return browser.BrowserHelper.HandleWithPartialURLexists(browser._driver, PartialURL);
+        }
+
+        public bool CheckTwoListsAreEqual(List<string> actual, List<string> expected, out string error, string listDescriptionMessage = "", bool sort = true)
+        {
+            error = "";
+            if (actual == null)
+            {
+                return false;
+            }
+            if (actual.Count != expected.Count)
+            {
+                error = string.Format("Expected {0} list contains {1} members; Actual {0} list contains {2} members", listDescriptionMessage, expected.Count, actual.Count);
+                return false;
+            }
+            bool identicalLists = true;
+            string[] actualArray = actual.ToArray();
+            string[] expectedArray = expected.ToArray();
+
+            if (sort)
+            {
+                Array.Sort(actualArray);
+                Array.Sort(expectedArray);
+            }
+
+
+            for (int i = 0; i < expectedArray.Length; i++)
+            {
+                string expectStr = expectedArray[i];
+                string actualStr = actualArray[i];
+
+                if (expectStr.Contains("\r\n"))
+                    expectStr = expectStr.Substring(0, expectStr.IndexOf("\r\n"));
+
+                if (actualStr.Contains("\r\n"))
+                    actualStr = actualStr.Substring(0, actualStr.IndexOf("\r\n"));
+
+                if (expectStr != actualStr)
+                {
+                    error += string.Format("Wrong value was detected! - expected: {0} Actual: {1}", expectStr, actualStr);
+                    identicalLists = false;
+                }
+            }
+
+            return identicalLists;
+        }
+
+        public string GetDiffrenceBetweenTwoLists(List<string> actual, List<string> expected)
+        {
+            Base.MongoDb.UpdateSteps("Get Diffrence Between Two Lists.");
+            string error = "";
+            actual = new CommonFunctions().MakeComparble(actual);
+            expected = new CommonFunctions().MakeComparble(expected);
+
+            List<string> diffrenceActual = actual.Except(expected).ToList();
+            List<string> diffrenceExpected = expected.Except(actual).ToList();
+
+            int i = 0;
+            if (diffrenceActual.Count > 0)
+            {
+                error = "Following users are shown on UI but not on Database:" + "\n";
+
+                foreach (string item in diffrenceActual)
+                {
+                    i++;
+                    error += string.Format("({0}){1}" + "\n", i, item);
+                }
+
+                error += "\n" + "\n";
+            }
+
+            if (diffrenceExpected.Count > 0)
+            {
+                int j = 0;
+                error += "Following users are shown on Database but not on UI:" + "\n";
+                foreach (string item in diffrenceExpected)
+                {
+                    j++;
+                    error += string.Format("({0}){1}" + "\n", j, item);
+                }
+            }
+
+            return error;
+        }
+
+        public void GoToWindowWithURL(Browser browser, string url)
+        {
+            browser.BrowserHelper.SelectWindowByPartialURL(browser._driver, url);
+        }
+
+        public Dictionary<string, string> GetParticularValueFromXML(List<string> tagName, string xml)
+        {
+            Dictionary<string, string> dic = new Dictionary<string, string>();
+            XmlDocument xmlDoc = new XmlDocument();
+            xmlDoc.LoadXml(xml);
+
+            for (int i = 0; i < tagName.Count; i++)
+            {
+                XmlNodeList nodeList = xmlDoc.GetElementsByTagName(tagName.ElementAt(i));
+                string value = string.Empty;
+                foreach (XmlNode node in nodeList)
+                {
+                    value = node.InnerText;
+                    dic.Add(tagName.ElementAt(i), value);
+                }
+            }
+            return dic;
+        }
+
+        public string GetParticularValueFromXML(string tagName, string xml)
+        {
+            XmlDocument xmlDoc = new XmlDocument();
+            xmlDoc.LoadXml(xml);
+            XmlNodeList nodeList = xmlDoc.GetElementsByTagName(tagName);
+            string value = string.Empty;
+            foreach (XmlNode node in nodeList)
+            {
+                value = node.InnerText;
+            }
+            return value;
+        }
+
+        public string CompareDic(Dictionary<string, JToken> exDic, Dictionary<string, JToken> acDic)
+        {
+            var dicKeyOnEx = exDic.Where(x => !acDic.Keys.Contains(x.Key)).ToDictionary(kv => kv.Key, kv => kv.Value);
+            var dicKeyOnAc = acDic.Where(x => !exDic.Keys.Contains(x.Key)).ToDictionary(kv => kv.Key, kv => kv.Value);
+
+            var dicJValuesDiff = exDic.Where(x => acDic.Keys.Contains(x.Key) && !acDic.Values.Contains(x.Value))
+                .Where(nv => nv.Value.GetType() == typeof(JValue)).ToDictionary(kv => kv.Key, kv => kv.Value);
+
+            UpdateErrorsWithDiffKeys(dicKeyOnEx);
+            UpdateErrorsWithDiffKeys(dicKeyOnAc, "Actual");
+            dicJValuesDiff.Values.ToList().ForEach(x => result += string.Format("{0}) Expected value for parameter <{1}> should be:" + Environment.NewLine + "<{2}>" + Environment.NewLine + "Actual is:" + Environment.NewLine + "<{3}>" + Environment.NewLine, i++, dicJValuesDiff
+                .FirstOrDefault(y => y.Value == x).Key, exDic[dicJValuesDiff
+                .FirstOrDefault(y => y.Value == x).Key], acDic[dicJValuesDiff.FirstOrDefault(y => y.Value == x).Key]));
+
+            var dicJcontainerValuesEx = new Dictionary<string, JToken>();
+            var dicJcontainerValuesAc = new Dictionary<string, JToken>();
+
+            var dicJContainerDiff = exDic.Where(x => acDic.Keys.Contains(x.Key) && !acDic.Values.Contains(x.Value))
+                                    .Where(nv => nv.Value.GetType() != typeof(JValue)).ToDictionary(kv => kv.Key, kv => kv.Value);
+
+            dicJContainerDiff.Keys.ToList().ForEach(k => dicJcontainerValuesEx.Add(k, exDic[k]));
+            dicJContainerDiff.Keys.ToList().ForEach(k => dicJcontainerValuesAc.Add(k, acDic[k]));
+
+            Dictionary<JObject, JObject> exJObject = new Dictionary<JObject, JObject>();
+            dicJcontainerValuesEx.Keys.ToList().ForEach(x => exJObject.Add(StringToJObject(dicJcontainerValuesEx[x].ToString()), StringToJObject(dicJcontainerValuesAc[x].ToString())));
+
+            if (dicJcontainerValuesAc.Count > 0 || dicJcontainerValuesEx.Count > 0)
+            {
+                exJObject.Keys.ToList().ForEach(x => CompareDic(JobjectToDictionery(x), JobjectToDictionery(exJObject[x])));
+            }
+
+            return result;
+        }
+
+        public JObject StringToJObject(string json)
+        {
+            json = Regex.Replace(json, @"^\s+$[\r\n]*", "", RegexOptions.Multiline);
+
+            if (json.StartsWith("["))
+            {
+                json = json.Replace("]", "");
+                json = Regex.Replace(json, @"^\s+$[\r\n]*", "", RegexOptions.Multiline);
+            }
+
+            if (json.EndsWith("]"))
+            {
+                json = json.Replace("[", "");
+                json = Regex.Replace(json, @"^\s+$[\r\n]*", "", RegexOptions.Multiline);
+            }
+
+            try
+            {
+                return JObject.Parse(json);
+            }
+            catch
+            {
+                return JObject.Parse("{}");
+            }
+        }
+
+        public Dictionary<string, JToken> JobjectToDictionery(JObject jObject, string keyToIgnore = "")
+        {
+            return jObject.Properties().ToDictionary(x => x.Name, x => x.Value).Where(y => y.Key != keyToIgnore).ToDictionary(kv => kv.Key, kv => kv.Value);
+        }
+
+        public Dictionary<string, JToken> JobjectToDictionery(JObject jObject, List<string> keyToIgnore)
+        {
+            return JobjectToDictionery(jObject).Where(x => !keyToIgnore.Contains(x.Key)).ToDictionary(kv => kv.Key, kv => kv.Value);
+        }
+
+        public Dictionary<string, JToken> OrderDictioneryBykey(Dictionary<string, JToken> dic)
+        {
+            return dic.OrderBy(x => x.Key).ToDictionary(kv => kv.Key, kv => kv.Value);
+        }
+
+        public T GetAttributeFrom<T>(object instance, string elName) where T : Attribute
+        {
+            PropertyInfo property = null;
+            var attrType = typeof(T);
+            property = instance.GetType().GetProperty(elName);
+
+            return (T)property.GetCustomAttributes(attrType, true).First();
+        }
+
+        public string GetVaribleName<T>(Expression<Func<T>> func)
+        {
+            return func.Body.ToString().Split('.').Last();
+        }
+
+        public JObject ConvertXmlToObject(string xml)
+        {
+            XmlDocument doc = new XmlDocument();
+            doc.LoadXml(xml);
+            string jsonText = JsonConvert.SerializeXmlNode(doc);
+
+            return JObject.Parse(jsonText);
+        }
+
+        public string CompareDictionaries(Dictionary<string, List<string>> tableDb, Dictionary<string, List<string>> tableUi)
+        {
+            StringBuilder error = new StringBuilder();
+            var diffDb = tableDb.Keys.Except(tableUi.Keys).ToList();
+            var diffUi = tableUi.Keys.Except(tableDb.Keys).ToList();
+            diffDb.ForEach(x => error.Append(x));
+            diffUi.ForEach(x => error.Append(x));
+
+            if (!string.IsNullOrEmpty(error.ToString())) return error.ToString();
+
+            var res = tableDb.Keys.ToList().Where(x => !tableDb[x].SequenceEqual(tableUi[x]));
+            res.ToList().ForEach(x => error.Append(x));
+
+            return error.ToString();
+        }
+
+        public bool CompareDic(Dictionary<string, string> expectedDic, Dictionary<string, string> actualDic)
+        {
+
+            if (!expectedDic.Keys.SequenceEqual(actualDic.Keys))
+            {
+                return false;
+            }
+
+            return expectedDic.Keys.ToList().All(k => expectedDic[k] == actualDic[k]);
+
+        }
+}

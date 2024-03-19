@@ -1,0 +1,37 @@
+public class logger{
+    public static string ticketFolder = @"\\...\Logs";
+		static readonly object _syncObject = new object();
+
+		public void Log(string message)
+		{
+			try
+			{
+				string formattedMessage = $"[{DateTime.Now.ToShortTimeString()}] {message}";
+
+				lock (_syncObject)
+				{
+					if (!Directory.Exists(ticketFolder))
+					{
+						Directory.CreateDirectory(ticketFolder);
+					}
+				}
+				
+				string date = DateTime.Today.ToString("MM-dd-yyyy", CultureInfo.InvariantCulture);
+				string logFilename = $"{date}.log";
+				string logFullPath = Path.Combine(ticketFolder, logFilename);
+
+				formattedMessage += Environment.NewLine;
+				if (!File.Exists(logFullPath))
+				{
+					File.WriteAllText(logFullPath, formattedMessage);
+				}
+				else
+				{
+					File.AppendAllText(logFullPath, formattedMessage);
+				}
+			}
+			catch
+			{
+			}
+		}
+}

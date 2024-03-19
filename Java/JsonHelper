@@ -1,0 +1,8 @@
+public class JsonHelper{
+    public JObject GetStaticJson(string stage)
+        {
+            var contentManager = new InterviewJsonContentManager(typeof(ActivityManager).Assembly);
+            var json = contentManager.GetStageJson(stage);
+            return json;
+        }
+}

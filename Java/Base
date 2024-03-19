@@ -1,0 +1,64 @@
+[TestFixture]
+public static Base{
+
+    public static Configurations _config { get; set; }
+
+        static readonly object _syncObject = new object();
+
+        protected TestObject.Test _test { get; set; }
+
+        protected BsonValue _params { get; set; }
+
+        public static TestRun _testRun { get; set; }
+
+        public static MongoDb MongoDb { get; set; }
+
+		public const int RetryNum = 2;
+
+		public enum DBName
+        {
+            JsonObjects,
+            configurations,
+            test,
+            testcases 
+        }
+
+		public void TestRunner(Action test)
+		{
+			var start = DateTime.Parse(DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss"));
+
+			try
+			{
+				test();
+				TestExecutionContext.CurrentContext.CurrentTest.Properties.Set("ErrorMessage", "");
+			}
+			catch(Exception e)
+			{
+				TestExecutionContext.CurrentContext.CurrentTest.Properties.Set("ErrorMessage", e.Message);
+			}
+
+			var end = DateTime.Parse(DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss"));
+			_test.Duration = (end - start).Duration().ToString();
+		}
+
+        [SetUp]
+        public void InitTest()
+        {
+            lock (_syncObject)
+            {
+                MongoDb = MongoDb ?? new MongoDb();
+				_config = _config ?? new Configurations();
+				_testRun = _testRun ?? new TestRun(_config);
+			}
+
+            _test = new TestObject.Test(_config);
+            _params = new Params(_test, _config).Context;
+            _test.UpdateTestStatus(TestContext.CurrentContext.Result, TestStatus.SentToHub);
+        }
+
+        [TearDown]
+        public void CleanTest()
+        {
+			_test.UpdateTestStatus(TestContext.CurrentContext.Result);
+        }
+}

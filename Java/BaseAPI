@@ -1,0 +1,13 @@
+public class BaseAPI: Base{
+    static readonly object _syncObject = new object();
+
+		[SetUp]
+        public void InitTestBaseAPI()
+        {
+			lock (_syncObject)
+			{
+				Thread.Sleep(3000);
+				_test.UpdateTestStatus(TestContext.CurrentContext.Result, TestStatus.Running);
+			}
+		}
+}

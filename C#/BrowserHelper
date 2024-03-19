@@ -1,0 +1,188 @@
+public class Browser{
+
+    public IWebDriver _driver { get; }
+
+        public BrowserHelper BrowserHelper { get; }
+
+        public ApplitoolsObj Applitools;
+
+        public Browser(string browserType, IDevice deviceCap = null)
+        {
+            BrowserHelper = new BrowserHelper(_driver);
+            DriverOptions options;
+
+            switch (browserType)
+            {
+                case "chrome":
+                    options = new ChromeOptions();
+                    break;
+                case "firefox":
+                    options = new FirefoxOptions();
+                    break;
+                case "explorer":
+                    options = new InternetExplorerOptions();
+                    ((InternetExplorerOptions)options).IntroduceInstabilityByIgnoringProtectedModeSettings = true;
+                    break;
+                case "browserStack":
+                    var caps = SetCapabilities(deviceCap);
+                    _driver = new RemoteWebDriver(new Uri("http://"), caps, TimeSpan.FromSeconds(200));
+                    return;
+                default:
+                    options = new ChromeOptions();
+                    break;
+            }
+
+            if (Environment.MachineName.Contains("SVETA"))
+            {
+                _driver = new ChromeDriver();
+            }
+
+            else
+            {
+                _driver = new RemoteWebDriver(new Uri("http://ip"), options.ToCapabilities(), TimeSpan.FromMinutes(30));
+            }
+        }
+
+        public DesiredCapabilities SetCapabilities(IDevice device)
+        {
+            DesiredCapabilities caps = new DesiredCapabilities();
+            caps.SetCapability("browserName", device.BrowserName);
+            caps.SetCapability("device", device.DeviceName);
+            caps.SetCapability("os_version", device.OperationSystem);
+            caps.SetCapability("resolution", device.Resolution);
+            caps.SetCapability("browserstack.user", "");
+            caps.SetCapability("browserstack.key", "");
+            caps.SetCapability("autoAcceptAlerts", true);
+            caps.SetCapability("realMobile", "true");
+            caps.SetCapability("acceptSslCert", true);
+            caps.SetCapability("browserstack.debug", true);
+            caps.SetCapability("browserstack.local", "false");
+            //caps.SetCapability("browserstack.local", true);
+            return caps;
+        }
+
+        public void Navigate(string url)
+        {
+            Base.MongoDb.UpdateSteps($"Before navigating to url: {url}.");
+            _driver.Navigate().GoToUrl(url);
+            Base.MongoDb.UpdateSteps($"Navigation completed.");
+        }
+
+        public void Maximize()
+        {
+            try
+            {
+                _driver.Manage().Window.Maximize();
+            }
+            catch
+            {
+                Base.MongoDb.UpdateSteps("Failed to maximize window.");
+            }
+        }
+
+        public void Quit()
+        {
+            Base.MongoDb.UpdateSteps("Browser has closed.");
+            _driver.Quit();
+        }
+
+        public void Refresh()
+        {
+            Base.MongoDb.UpdateSteps("Page was refreshed.");
+            _driver.Navigate().Refresh();
+        }
+
+        public void GoBack()
+        {
+            Base.MongoDb.UpdateSteps("Go Back to previous page.");
+            _driver.Navigate().Back();
+        }
+
+        public void OpenNewTab()
+        {
+            IWebElement body = _driver.FindElement(By.TagName("body"));
+            body.SendKeys(Keys.Control + 't');
+        }
+
+        public string GetUrl()
+        {
+            return _driver.Url;
+        }
+
+        public string GetScreenShot(string testNumber)
+        {
+            var path = string.Empty;
+
+            try
+            {
+                path = $@"{testNumber}.jpg";
+                Screenshot ss = ((ITakesScreenshot)_driver).GetScreenshot();
+
+                string screenshot = ss.AsBase64EncodedString;
+                byte[] screenshotAsByteArray = ss.AsByteArray;
+                ss.SaveAsFile(path, ScreenshotImageFormat.Jpeg);
+                path = new CommonFunctions().UploadToCloudinary(path);
+            }
+            catch (Exception e)
+            {
+                path = e.ToString();
+            }
+
+            return path;
+        }
+
+        public void OpenNewTab(string url = "", int timeOut = 60)
+        {
+            BrowserHelper.RunJavascript(_driver, "window.open();");
+            BrowserHelper.WaitUntill(_driver, _driver.WindowHandles.Count, x => x > 1);
+            _driver.SwitchTo().Window(_driver.WindowHandles[1]);
+            _driver.Navigate().GoToUrl(url);
+        }
+
+        public Browser OpenNewBrowser(string browserType)
+        {
+            Base.MongoDb.UpdateSteps("Open New Browser.");
+            Browser _browser = new Browser(browserType);
+            Thread.Sleep(500);
+            _browser.Maximize();
+            return _browser;
+        }
+
+        public void SwitchToFirstTab()
+        {
+            Base.MongoDb.UpdateSteps("Switch To First Tab.");
+            _driver.SwitchTo().Window(_driver.WindowHandles[0]);
+        }
+
+        internal void SwitchToLastTab(int index = 1)
+        {
+            Base.MongoDb.UpdateSteps("Switch To Last Tab.");
+            _driver.SwitchTo().Window(_driver.WindowHandles[index]);
+        }
+
+        public void Close()
+        {
+            Base.MongoDb.UpdateSteps($"Browser Closed at Url: {_driver.Url}.");
+            _driver.Close();
+        }
+
+        public void KillProcesses()
+        {
+            try
+            {
+                Process[] chromeDriverProcesses = Process.GetProcessesByName("chromedriver");
+
+                if (chromeDriverProcesses.Length > 0)
+                {
+                    foreach (var chromeDriverProcess in chromeDriverProcesses)
+                    {
+                        chromeDriverProcess.Kill();
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+    
+}

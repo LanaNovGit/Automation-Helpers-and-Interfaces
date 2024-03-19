@@ -1,188 +1,1777 @@
-public class Browser{
+public class BrowserHelper{
 
-    public IWebDriver _driver { get; }
-
-        public BrowserHelper BrowserHelper { get; }
-
-        public ApplitoolsObj Applitools;
-
-        public Browser(string browserType, IDevice deviceCap = null)
+    private IWebDriver _driver;
+        public BrowserHelper(IWebDriver driver)
         {
-            BrowserHelper = new BrowserHelper(_driver);
-            DriverOptions options;
-
-            switch (browserType)
-            {
-                case "chrome":
-                    options = new ChromeOptions();
-                    break;
-                case "firefox":
-                    options = new FirefoxOptions();
-                    break;
-                case "explorer":
-                    options = new InternetExplorerOptions();
-                    ((InternetExplorerOptions)options).IntroduceInstabilityByIgnoringProtectedModeSettings = true;
-                    break;
-                case "browserStack":
-                    var caps = SetCapabilities(deviceCap);
-                    _driver = new RemoteWebDriver(new Uri("http://"), caps, TimeSpan.FromSeconds(200));
-                    return;
-                default:
-                    options = new ChromeOptions();
-                    break;
-            }
-
-            if (Environment.MachineName.Contains("SVETA"))
-            {
-                _driver = new ChromeDriver();
-            }
-
-            else
-            {
-                _driver = new RemoteWebDriver(new Uri("http://ip"), options.ToCapabilities(), TimeSpan.FromMinutes(30));
-            }
+            _driver = driver;
         }
 
-        public DesiredCapabilities SetCapabilities(IDevice device)
+        internal void ClickUntillOpen(IWebElement dropDown, IWebDriver driver, int timeOut)
         {
-            DesiredCapabilities caps = new DesiredCapabilities();
-            caps.SetCapability("browserName", device.BrowserName);
-            caps.SetCapability("device", device.DeviceName);
-            caps.SetCapability("os_version", device.OperationSystem);
-            caps.SetCapability("resolution", device.Resolution);
-            caps.SetCapability("browserstack.user", "");
-            caps.SetCapability("browserstack.key", "");
-            caps.SetCapability("autoAcceptAlerts", true);
-            caps.SetCapability("realMobile", "true");
-            caps.SetCapability("acceptSslCert", true);
-            caps.SetCapability("browserstack.debug", true);
-            caps.SetCapability("browserstack.local", "false");
-            //caps.SetCapability("browserstack.local", true);
-            return caps;
+            WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeOut));
+            wait.Until((x) =>
+            {
+                ClickElement(dropDown);
+                return WaitForElements(driver, SearchType.CssSelector, "[role='option'] span", 2, 2);
+            });
         }
 
-        public void Navigate(string url)
+        internal bool CheckHeightOfEl(IWebElement Check, IWebElement Above, IWebElement Below, IWebDriver browserDriver)
         {
-            Base.MongoDb.UpdateSteps($"Before navigating to url: {url}.");
-            _driver.Navigate().GoToUrl(url);
-            Base.MongoDb.UpdateSteps($"Navigation completed.");
+            Base.MongoDb.UpdateSteps("Check element location.");
+            WaitForElement(Check, browserDriver);
+            WaitForElement(Below, browserDriver);
+            WaitForElement(Above, browserDriver);
+
+            return Below.Location.Y > Check.Location.Y && Check.Location.Y > Above.Location.Y;
         }
 
-        public void Maximize()
+        internal void RefreshPageUntil(IWebDriver browserDriver, IWebElement element, Func<IWebElement, bool> func, int timeOut = 60)
+        {
+            ExecuteActionUntill(browserDriver, () =>
+            {
+                string title = "";
+                if (WaitForElement(browserDriver, element, 5))
+                {
+                    title = element.Text;
+                    return true;
+                }
+
+                browserDriver.Navigate().Refresh();
+                return false;
+            }, timeOut * 2);
+        }
+
+        internal void SendKeysToTextArea(IWebDriver browserDriver, IWebElement element, string txt)
+        {
+            Actions actions = new Actions(browserDriver);
+            actions.MoveToElement(element);
+            actions.Click();
+            actions.SendKeys(Keys.Control + "a");
+            actions.Build().Perform();
+            actions.SendKeys(Keys.Delete);
+            actions.Build().Perform();
+            actions.MoveToElement(element);
+            actions.Click();
+            actions.SendKeys(Keys.Control + txt);
+            actions.Build().Perform();
+
+        }
+
+        public bool WaitUntill(IWebDriver browserDriver, IWebElement el, Func<IWebElement, bool> func, int timeOut = 60, string exception = "")
         {
             try
             {
-                _driver.Manage().Window.Maximize();
+                WebDriverWait wait = new WebDriverWait(browserDriver, TimeSpan.FromSeconds(timeOut));
+                wait.Until(x =>
+                {
+                    try
+                    {
+                        return func(el) == true;
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                });
             }
             catch
             {
-                Base.MongoDb.UpdateSteps("Failed to maximize window.");
-            }
-        }
-
-        public void Quit()
-        {
-            Base.MongoDb.UpdateSteps("Browser has closed.");
-            _driver.Quit();
-        }
-
-        public void Refresh()
-        {
-            Base.MongoDb.UpdateSteps("Page was refreshed.");
-            _driver.Navigate().Refresh();
-        }
-
-        public void GoBack()
-        {
-            Base.MongoDb.UpdateSteps("Go Back to previous page.");
-            _driver.Navigate().Back();
-        }
-
-        public void OpenNewTab()
-        {
-            IWebElement body = _driver.FindElement(By.TagName("body"));
-            body.SendKeys(Keys.Control + 't');
-        }
-
-        public string GetUrl()
-        {
-            return _driver.Url;
-        }
-
-        public string GetScreenShot(string testNumber)
-        {
-            var path = string.Empty;
-
-            try
-            {
-                path = $@"{testNumber}.jpg";
-                Screenshot ss = ((ITakesScreenshot)_driver).GetScreenshot();
-
-                string screenshot = ss.AsBase64EncodedString;
-                byte[] screenshotAsByteArray = ss.AsByteArray;
-                ss.SaveAsFile(path, ScreenshotImageFormat.Jpeg);
-                path = new CommonFunctions().UploadToCloudinary(path);
-            }
-            catch (Exception e)
-            {
-                path = e.ToString();
-            }
-
-            return path;
-        }
-
-        public void OpenNewTab(string url = "", int timeOut = 60)
-        {
-            BrowserHelper.RunJavascript(_driver, "window.open();");
-            BrowserHelper.WaitUntill(_driver, _driver.WindowHandles.Count, x => x > 1);
-            _driver.SwitchTo().Window(_driver.WindowHandles[1]);
-            _driver.Navigate().GoToUrl(url);
-        }
-
-        public Browser OpenNewBrowser(string browserType)
-        {
-            Base.MongoDb.UpdateSteps("Open New Browser.");
-            Browser _browser = new Browser(browserType);
-            Thread.Sleep(500);
-            _browser.Maximize();
-            return _browser;
-        }
-
-        public void SwitchToFirstTab()
-        {
-            Base.MongoDb.UpdateSteps("Switch To First Tab.");
-            _driver.SwitchTo().Window(_driver.WindowHandles[0]);
-        }
-
-        internal void SwitchToLastTab(int index = 1)
-        {
-            Base.MongoDb.UpdateSteps("Switch To Last Tab.");
-            _driver.SwitchTo().Window(_driver.WindowHandles[index]);
-        }
-
-        public void Close()
-        {
-            Base.MongoDb.UpdateSteps($"Browser Closed at Url: {_driver.Url}.");
-            _driver.Close();
-        }
-
-        public void KillProcesses()
-        {
-            try
-            {
-                Process[] chromeDriverProcesses = Process.GetProcessesByName("chromedriver");
-
-                if (chromeDriverProcesses.Length > 0)
+                if (!string.IsNullOrEmpty(exception))
                 {
-                    foreach (var chromeDriverProcess in chromeDriverProcesses)
+                    throw new Exception(exception);
+                }
+
+                return false;
+            }
+
+            return true;
+        }
+
+		public bool WaitUntill(IWebDriver browserDriver, List<IWebElement> els, Func<List<IWebElement>, bool> func, int timeOut = 60, string exception = "")
+		{
+			try
+			{
+				WebDriverWait wait = new WebDriverWait(browserDriver, TimeSpan.FromSeconds(timeOut));
+				wait.Until(x =>
+				{
+					try
+					{
+						return func(els) == true;
+					}
+					catch
+					{
+						return false;
+					}
+				});
+			}
+			catch
+			{
+				if (!string.IsNullOrEmpty(exception))
+				{
+					throw new Exception(exception);
+				}
+
+				return false;
+			}
+
+			return true;
+		}
+
+		public bool WaitUntill(IWebDriver browserDriver, Func<string, bool> func, int timeOut = 60, string exception = "")
+        {
+            try
+            {
+                WebDriverWait wait = new WebDriverWait(browserDriver, TimeSpan.FromSeconds(timeOut));
+                wait.Until(x =>
+                {
+                    try
                     {
-                        chromeDriverProcess.Kill();
+                        return func(browserDriver.Url.ToLower()) == true;
                     }
+                    catch
+                    {
+                        return false;
+                    }
+                });
+            }
+            catch
+            {
+                if (!string.IsNullOrEmpty(exception))
+                {
+                    throw new Exception(exception);
+                }
+
+                return false;
+            }
+
+            return true;
+        }
+
+        public bool WaitUntill(IList<IWebElement> el, IWebDriver browserDriver, Func<IList<IWebElement>, bool> func, int timeOut = 60, string exception = "")
+        {
+            try
+            {
+                WebDriverWait wait = new WebDriverWait(browserDriver, TimeSpan.FromSeconds(timeOut));
+                wait.Until(x =>
+                {
+                    try
+                    {
+                        return func(el) == true;
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                });
+            }
+            catch
+            {
+                if (!string.IsNullOrEmpty(exception))
+                {
+                    throw new Exception(exception);
+                }
+
+                return false;
+            }
+
+            return true;
+        }
+
+        internal void SetTextJavaScript(IWebDriver browserDriver, IWebElement element, string value)
+        {
+            IJavaScriptExecutor rightexecutor = (IJavaScriptExecutor)browserDriver;
+            rightexecutor.ExecuteScript(string.Format("arguments[0].value = '{0}'", value), element);
+        }
+
+        internal void ClickTab(IWebElement element)
+        {
+            element.SendKeys(Keys.Tab);
+        }
+
+        internal void ClickEnterOnElement(IWebElement element)
+        {
+            element.SendKeys(Keys.Enter);
+        }
+
+        internal void SetTextInField(IWebElement element, String sValue, bool clearField = true, bool waitForAjax = false, string details = "")
+        {
+            ClickElement(element);
+
+            if (clearField)
+                element.Clear();
+
+            element.SendKeys(sValue);
+        }
+
+
+
+        internal void SetTextInTextArea(IWebDriver browserDriver, IWebElement element, string txt)
+        {
+            SendKeysToTextArea(browserDriver, element, txt);
+        }
+
+        internal void ClickBackSpace(IWebDriver browserDriver, IWebElement element)
+        {
+            ClickElementOld(element, browserDriver);
+            element.SendKeys(Keys.Backspace);
+        }
+
+        internal void SetTextInField(IWebDriver browserDriver, IWebElement element, String sValue, bool clearField = true, bool useTab = true)
+        {
+            ClickElementOld(element, browserDriver);
+            if (clearField)
+                element.Clear();
+            element.SendKeys(sValue);
+
+            if (useTab)
+            {
+                element.SendKeys(Keys.Tab);
+            }
+        }
+
+        internal void SetTextInFieldWithValidation(IWebDriver browserDriver, IWebElement element, String sValue, bool clearField = true)
+        {
+            WebDriverWait wait = new WebDriverWait(browserDriver, TimeSpan.FromSeconds(20));
+            wait.Until((x) =>
+            {
+                SetTextInField(browserDriver, element, sValue);
+                return element.GetAttribute("value") == sValue;
+            });
+        }
+
+        public void WaitUntilPArticularCountOFElements(IWebDriver browserDriver, string locator, int numOfElements, int timeOut = 60)
+        {
+            try
+            {
+                try
+                {
+                    WebDriverWait wait = new WebDriverWait(browserDriver, TimeSpan.FromSeconds(timeOut));
+                    wait.Until(x =>
+                    {
+                        return FindElements(browserDriver, SearchType.XPath, locator).Count == numOfElements;
+                    });
+                }
+                catch
+                {
+                    return;
                 }
             }
             catch
             {
+                return;
+            }
+            return;
+        }
+
+        internal void WaitForInnerTextToChange(IWebDriver browserDriver, SearchType searchType, string sLocatorAttribute, int timeOutInSeconds = 60)
+        {
+            IWebElement el = FindElement(browserDriver, SearchType.XPath, sLocatorAttribute);
+            WebDriverWait wait = new WebDriverWait(browserDriver, TimeSpan.FromSeconds(20));
+
+            try
+            {
+                wait.Until((x) =>
+                {
+                    return el.GetAttribute("value") != string.Empty;
+                });
+            }
+            catch
+            {
+
+                return;
+            }
+
+        }
+
+        internal void ClearTextField(IWebElement element)
+        {
+            element.Click();
+            Sleep(0.5);
+            element.Clear();
+            if (element.GetAttribute("value") != (""))
+            {
+                element.Clear();
+            }
+
+            element.SendKeys(Keys.Tab);
+        }
+
+        internal void ClearTextFieldCtrlA(IWebElement element)
+        {
+            element.Click();
+            element.SendKeys(Keys.Control + "a");
+            Sleep(0.5);
+            element.SendKeys(Keys.Backspace);
+            element.SendKeys(Keys.Tab);
+        }
+
+        internal void ScrollElementIntoView(IWebDriver driver, IWebElement element)
+        {
+            ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].scrollIntoView(true);", element);
+            ((IJavaScriptExecutor)driver).ExecuteScript("javascript:window.scrollBy(0, -300)");
+        }
+
+        internal void ScrollBy(IWebDriver driver, int pixels)
+        {
+            IJavaScriptExecutor js = (IJavaScriptExecutor)driver;
+            js.ExecuteScript(string.Format("javascript:window.scrollBy(0,{0})", pixels));
+        }
+
+        internal void ScrollElementIntoViewUsingLocation(IWebDriver driver, IWebElement element)
+        {
+            int[] xy = GetLocation(element);
+            int y = xy[1] - 400;
+            IJavaScriptExecutor js = (IJavaScriptExecutor)driver;
+            js.ExecuteScript(string.Format("javascript:window.scrollTo(0,{0})", y));
+        }
+
+        internal void ScrollElementIntoViewUsingLocationByXpath(IWebDriver driver, string xpath)
+        {
+            IWebElement element = FindElement(driver, SearchType.XPath, xpath);
+            int[] xy;
+            try
+            {
+                xy = GetLocation(element);
+
+            }
+            catch (StaleElementReferenceException)
+            {
+                element = FindElement(driver, SearchType.XPath, xpath);
+                xy = GetLocation(element);
+            }
+            int y = xy[1] - 400;
+            IJavaScriptExecutor js = (IJavaScriptExecutor)driver;
+            js.ExecuteScript(string.Format("javascript:window.scrollTo(0,{0})", y));
+        }
+
+
+        internal string GetTextFieldValue(IWebElement el)
+        {
+
+            string actVal = el.Text.ToLower();
+            if (actVal.Trim() == string.Empty)
+                actVal = el.GetAttribute("value").ToLower();
+            return actVal;
+        }
+
+        internal string GetTextFieldValueByAttribute(IWebElement el, string attributeType)
+        {
+
+            string actVal = el.GetAttribute(attributeType).ToLower();
+            if (actVal.Trim() == string.Empty)
+                actVal = el.GetAttribute("value").ToLower();
+            return actVal;
+        }
+
+        internal StringBuilder VerifyTextFieldValue(IWebElement el, string sExpectedValue)
+        {
+            StringBuilder errorMessage = new StringBuilder();
+            sExpectedValue = sExpectedValue.ToLower();
+            string actVal = el.Text.ToLower();
+            if (actVal.Trim() == string.Empty & sExpectedValue != string.Empty)
+                actVal = el.GetAttribute("value").ToLower();
+            if (el.GetAttribute("...") != null)
+            {
+                if (el.GetAttribute("...").IndexOf("...") != -1 && actVal.Trim().IndexOf("...") != -1)
+                {
+                    sExpectedValue = actVal;
+                }
+            }
+
+            if (sExpectedValue.Replace("/", "") != actVal.Replace("/", ""))
+            {
+                string fieldName = (el.GetAttribute("...") != null) ? el.GetAttribute("...").Replace("...", "") : el.GetAttribute("placeholder");
+                errorMessage.Append("expected value for " + fieldName + " field: " + sExpectedValue + "; actual value: " + actVal + "\n");
+            }
+            return errorMessage;
+        }
+
+        internal StringBuilder VerifyDropListValue(IWebElement el, string sValue)
+        {
+            StringBuilder errorMessage = new StringBuilder();
+            IWebElement element = el.FindElement(By.XPath(""));
+            string actValue = element.Text;
+            if (sValue != actValue)
+            {
+                string fieldName = string.Empty;
+                if (el.GetAttribute("...") != null)
+                {
+                    fieldName = el.GetAttribute("...").Replace("...", "").Replace("...", "");
+                }
+                else if (el.GetAttribute("...") != null)
+                {
+                    fieldName = el.GetAttribute("...").Replace("...", "").Replace("...", "");
+                }
+                else if (el.Text != string.Empty)
+                {
+                    int l = el.Text.IndexOf('\r');
+                    fieldName = el.Text.Substring(0, l);
+                }
+                errorMessage.Append("Expected Value for " + fieldName + " field: " + sValue + " actual value: " + actValue);
+            }
+            return errorMessage;
+        }
+
+        internal StringBuilder VerifyFieldIsDisabled(IWebElement el, string IsDisabled = "true")
+        {
+            StringBuilder errorMessage = new StringBuilder();
+            string actIsDisabled;
+            if (IsDisabled.IndexOf("true") != -1)
+            {
+                actIsDisabled = el.GetAttribute("disabled").ToString();
+            }
+            else
+            {
+                bool isDisabled = !el.Enabled;
+                actIsDisabled = isDisabled.ToString().ToLower().Trim();
+            }
+            if (IsDisabled != actIsDisabled)
+            {
+                string sExpextedDisabled = IsDisabled == "true" ? "disabled" : "enabled";
+                string sActDisabled = actIsDisabled == "true" ? "disabled" : "enabled";
+                errorMessage.Append(el.GetAttribute("field-name").Replace("Model.Data.", "").Replace("model.Value.", "") +
+                    " field is supposed to be " + sExpextedDisabled + "; actual value: " + sActDisabled);
+            }
+            return errorMessage;
+        }
+
+        internal StringBuilder VerifyCheckBoxValue(IWebElement el, out bool actIsChecked, bool isChecked = true)
+        {
+            StringBuilder errorMessage = new StringBuilder();
+            //string actIsDisabled;
+            actIsChecked = el.Selected;
+
+            if (isChecked != actIsChecked)
+            {
+                string strExpIsChecked = isChecked == true ? "checked" : "unchecked";
+                string strActIsChecked = actIsChecked == true ? "checked" : "unchecked";
+                if (el.GetAttribute("field-name") != null)
+                {
+                    errorMessage.Append(el.GetAttribute("field-name").Replace("Model.Data.", "").Replace("model.Value.", "") +
+    " field is supposed to be " + strExpIsChecked + "; actual value: " + strActIsChecked);
+                }
+                else
+                {
+                    try
+                    {
+                        errorMessage.Append(el.GetAttribute("ID").Replace("Model.Data.", "").Replace("model.Value.", "") +
+    " field is supposed to be " + strExpIsChecked + "; actual value: " + strActIsChecked);
+                    }
+                    catch
+                    {
+
+                    }
+                }
+
+            }
+            return errorMessage;
+        }
+
+        internal bool IsChecked(IWebElement el)
+        {
+            if (el.Selected)
+                return true;
+            return false;
+        }
+
+        internal StringBuilder VerifyRadioButtonValue(IWebDriver driver, IWebElement el, bool expSelected)
+        {
+            StringBuilder errorMessage = new StringBuilder();
+            bool actSelected = el.Selected;
+
+            if (expSelected != actSelected)
+            {
+                errorMessage.Append("expexted value for" + el.GetAttribute("id").Replace("...", "") + " field: " + expSelected + "; actual value: " + actSelected + "\n");
+            }
+            return errorMessage;
+        }
+
+        internal bool VerifyTheElementIsFloating(IWebDriver driver, IWebElement el)
+        {
+            RunJavascript(driver, "scroll(0, -250);");
+            int elementLocation = el.Location.Y;
+            RunJavascript(driver, "scroll(0,500);");
+            int elementLocation1 = el.Location.Y;
+            if (elementLocation == elementLocation1)
+            {
+                return false;
+            }
+            return true;
+        }
+
+        internal IWebElement FindElement(IWebDriver driver, SearchType bySearchType, string sLocatorAttribute)
+        {
+            By by = CreateBy(bySearchType, sLocatorAttribute);
+            try
+            {
+                return driver.FindElement(by);
+            }
+            catch
+            {
+                throw new Exception(string.Format("Element with {0} : {1} does not exist", bySearchType.ToString(), sLocatorAttribute));
             }
         }
-    
+
+
+        internal int GetColumnOrder(IWebDriver driver, IReadOnlyCollection<IWebElement> columnNames, string columnName, string searchInTag = "td")
+        {
+            foreach (IWebElement element in columnNames)
+            {
+                if (element.Displayed)
+                {
+                    List<IWebElement> columns = element.FindElements(By.TagName(searchInTag)).ToList();
+                    for (int i = 0; i < columns.Count; i++)
+                    {
+                        if (columns[i].Text.Contains(columnName))
+                        {
+                            return i;
+                        }
+                    }
+                }
+            }
+            return -1;
+
+        }       
+
+        internal ReadOnlyCollection<IWebElement> FindElements(IWebDriver driver, SearchType bySearchType, string sLocatorAttribute)
+        {
+            By by = CreateBy(bySearchType, sLocatorAttribute);
+            return driver.FindElements(by);
+        }
+
+        internal IWebElement GetRadioButton(IWebDriver driver, string id, string sValue)
+        {
+            //string ID = "PolicyData_DeadBoltLocks";
+            IReadOnlyCollection<IWebElement> elements = FindElements(driver, SearchType.Id, id);
+            var radioList = new List<IWebElement>();
+            radioList.AddRange(elements);
+            for (int i = 0; i < radioList.Count; i++)
+            {
+                if (String.Compare(radioList[i].GetAttribute("value"), sValue, true) == 0)
+                {
+                    return radioList[i];
+                }
+            }
+            return null;
+        }
+
+        internal bool WaitForElementToDisappear(IWebDriver driver, SearchType searchType, string sLocatorAttribute, int timeOutInSeconds = 60)
+        {
+                WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeOutInSeconds));
+                return  wait.Until<bool>((d) => IsElementExists(driver, searchType, sLocatorAttribute) == false );
+      }
+
+        internal bool WaitForAllRelevantElementsToDisappear(IWebDriver driver, SearchType searchType, string sLocatorAttribute, int timeOutInSeconds = 60)
+        {
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+            TimeSpan ts = new TimeSpan();
+            ts = stopwatch.Elapsed;
+            bool elementIsVisible = IsAnyElementExists(driver, searchType, sLocatorAttribute, 1);
+            while (ts.TotalSeconds < timeOutInSeconds && elementIsVisible)
+            {
+                ts = stopwatch.Elapsed;
+                Sleep(0.5);
+                elementIsVisible = IsElementExists(driver, searchType, sLocatorAttribute, 1);
+            }
+            stopwatch.Stop();
+            return elementIsVisible;
+        }
+
+        internal bool WaitForDriverSourceToChange(IWebDriver driver, SearchType searchType, string sLocatorAttribute, string initialValue, int timeOutInSeconds = 60, bool waitForText = true, bool canBeEmpty = true)
+        {
+            By by = CreateBy(searchType, sLocatorAttribute);
+            if (by == null)
+            {
+                throw new Exception("By can't be null");
+            }
+            bool returnValue = false;
+            if (timeOutInSeconds > 0)
+            {
+                try
+                {
+                    WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeOutInSeconds));
+                    wait.IgnoreExceptionTypes();
+                    if (waitForText)
+                    {
+                        wait.Until(d => (bool)!(d.FindElement(by).Text.Equals(initialValue)));
+                        if (!canBeEmpty)
+                        {
+                            wait.Until(d => (bool)(d.FindElement(by).Text != string.Empty));
+                        }
+
+                    }
+                    else
+                    {
+                        wait.Until(d => (bool)!(d.FindElement(by).GetAttribute("value").Equals(initialValue)));
+                        if (!canBeEmpty)
+                        {
+                            wait.Until(d => (bool)(d.FindElement(by).GetAttribute("value") != string.Empty));
+                        }
+                    }
+
+
+                    returnValue = true;
+                }
+                catch
+                {
+                    returnValue = false;
+                }
+
+            }
+            return returnValue;
+        }
+
+        internal bool WaitForElement(IWebDriver driver, SearchType searchType, string sLocatorAttribute, int timeOutInSeconds = 60, bool throwExeption = false, string elementName = "")
+        {
+            By by = CreateBy(searchType, sLocatorAttribute);
+            if (by == null)
+            {
+                throw new Exception("By can't be null");
+            }
+            bool returnValue = false;
+            if (timeOutInSeconds > 0)
+            {
+                try
+                {
+                    WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeOutInSeconds));
+                    wait.IgnoreExceptionTypes();
+                    IWebElement webElement = wait.Until(SeleniumExtras.WaitHelpers.ExpectedConditions.ElementIsVisible(by));
+                    returnValue = true;
+                }
+                catch
+                {
+                    returnValue = false;
+                }
+            }
+
+            if (throwExeption && !string.IsNullOrEmpty(elementName) && !returnValue)
+            {
+                throw new Exception(string.Format("Following element wasn't exist: {0}", elementName));
+            }
+            else if (throwExeption && string.IsNullOrEmpty(elementName) && !returnValue)
+            {
+                throw new Exception(string.Format("Element with following selector wasn't exist: {0}", sLocatorAttribute));
+            }
+
+            return returnValue;
+        }
+
+        internal static bool WaitForElement(IWebDriver driver, IWebElement el, int timeOutInSeconds = 20, bool throwEx = false, string elName = "")
+        {
+            var stam = el.Displayed;
+
+
+            try
+            {
+                WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeOutInSeconds));
+                wait.Until((d) =>
+                {
+                    try
+                    {
+                        return el.Displayed;
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                });
+            }
+            catch
+            {
+                if (throwEx)
+                {
+                    throw new Exception(string.Format("Following element wasn't exist: {0}", elName));
+                }
+
+                return false;
+            }
+
+            return true;
+        }
+
+        internal bool WaitForElements(IWebDriver driver, IList<IWebElement> elements, int timeOutInSeconds = 60, bool throwExp = false, string desc = "", int numOfEls = 2)
+        {
+            try
+            {
+                WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeOutInSeconds));
+                wait.Until((d) =>
+                {
+                    try
+                    {
+                        return elements.Count >= numOfEls;
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                });
+            }
+            catch
+            {
+                if (throwExp)
+                {
+                    throw new Exception(desc);
+                }
+
+                return false;
+            }
+
+            return true;
+        }
+
+
+        internal bool WaitForElementDissapear(IWebDriver driver, IWebElement el, int timeOutInSeconds = 20)
+        {
+            bool displyed = true;
+            try
+            {
+                WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeOutInSeconds));
+                wait.Until<bool>((d) =>
+                {
+                    try
+                    {
+                        return !el.Displayed;
+                    }
+                    catch
+                    {
+                        return true;
+                    }
+                });
+            }
+            catch
+            {
+                displyed = false;
+                return false;
+            }
+
+            return displyed;
+        }
+
+
+        internal bool WaitForElements(IWebDriver driver, SearchType searchType, string sLocatorAttribute, int numOfElsToWait = 2, int timeOutInSeconds = 60, bool throwExp = false, string exception = "")
+        {
+            try
+            {
+                By by = CreateBy(searchType, sLocatorAttribute);
+                WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeOutInSeconds));
+                wait.Until(d => d.FindElements(by).Count > numOfElsToWait - 1);
+                return true;
+            }
+            catch
+            {
+                WaitForElement(driver, searchType, sLocatorAttribute, timeOutInSeconds);
+                if (throwExp)
+                {
+                    throw new Exception(exception);
+                }
+                return false;
+            }
+        }
+
+        internal bool IlistWaitUntill(Browser browser, Expression<Func<IList<IWebElement>>> func, Func<IList<IWebElement>, bool> func2, int timeOutInSeconds = 60, bool throwExp = false, string desc = "")
+        {
+            List<IWebElement> elsIlist = null;
+            Type type = GetCallingClassType();
+            By by = GetElementsBy(browser, type, func);
+            string iListName = new CommonFunctions().GetVaribleName(func);
+
+            bool flag = false;
+
+            ExecuteActionUntill(browser._driver, () =>
+            {
+                elsIlist = browser._driver.FindElements(by).ToList();
+                flag = func2(elsIlist);
+                return flag;
+            }, timeOutInSeconds);
+
+            type.GetProperty(iListName).SetValue(Activator.CreateInstance(type, browser), elsIlist);
+
+            if (!flag && throwExp) throw new Exception("Element: " + desc + " was not found.");
+
+            return flag;
+        }       
+
+        public By GetElementsBy(Browser browser, Type type, Expression<Func<IList<IWebElement>>> func)
+        {
+            object instatnse = Activator.CreateInstance(type, browser);
+            FindsByAttribute findsByAttribute = new CommonFunctions().GetAttributeFrom<FindsByAttribute>(instatnse, new CommonFunctions().GetVaribleName(func));
+            string locatorValue = findsByAttribute.Using;
+            How locator = findsByAttribute.How;
+            SearchType searchType = (SearchType)Enum.Parse(typeof(SearchType), locator.ToString());
+            return CreateBy(searchType, locatorValue);
+        }
+
+        internal void WaitForElementAttributeToChange(IWebDriver driver, SearchType searchType, string sLocatorAttribute, string attributeName, int timeOutInSeconds = 60)
+        {
+            try
+            {
+                string curAttValue = FindElement(driver, searchType, sLocatorAttribute).GetAttribute(attributeName);
+                By by = CreateBy(searchType, sLocatorAttribute);
+                WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(60));
+                wait.Until(d => d.FindElement(by).GetAttribute(attributeName) != curAttValue);
+            }
+            catch
+            {
+                return;
+            }
+        }
+
+        internal void WaitUntillClickable(IWebElement el, IWebDriver driver, int timeOut = 60)
+        {
+            WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeOut));
+
+            try
+            {
+                wait.Until(d => el.Displayed && el.Enabled);
+            }
+
+            catch
+            {
+                return;
+            }
+        }
+
+        internal void WaitUntilElementDissapear(IWebDriver driver, string locatorAttribute, int timeOutInSeconds = 60)
+        {
+            bool elementExists = true;
+            while (elementExists)
+            {
+                try
+                {
+                    driver.FindElement(By.XPath(locatorAttribute));
+                    elementExists = true;
+                }
+                catch
+                {
+                    return;
+
+                }
+            }
+        }
+
+
+        internal void ClickElement(IWebElement el, int timeOut = 20)
+        {
+            int temps = 0;
+
+            while (temps < timeOut)
+            {
+                try
+                {
+                    el.Click();
+                    break;
+                }
+
+                catch
+                {
+                    temps++;
+                    Sleep(1);
+                }
+            }
+        }
+
+        internal void ClickEl(IWebElement el, int timeOut = 20)
+        {
+            int temps = 0;
+
+            while (temps < timeOut)
+            {
+                try
+                {
+                    el.Click();
+                    break;
+                }
+
+                catch
+                {
+                    temps++;
+                    Sleep(1);
+                }
+            }
+        }
+
+        internal void ClickElements(IWebDriver driver, List<IWebElement> els, int timeOut = 60, bool useJavaScript = false)
+        {
+            int temps = 0;
+
+            if (useJavaScript)
+            {
+                while (temps < timeOut)
+                {
+                    try
+                    {
+                        for (int i = 0; i < els.Count; i++)
+                        {
+                            ((IJavaScriptExecutor)driver).ExecuteScript("return arguments[0].click()", els[i]);
+                        }
+
+                        break;
+                    }
+
+                    catch (Exception)
+                    {
+                        temps++;
+                        Sleep(1);
+                    }
+                }
+            }
+
+            else
+            {
+                while (temps < timeOut)
+                {
+                    try
+                    {
+                        for (int i = 0; i < els.Count; i++)
+                        {
+                            els[i].Click();
+                        }
+
+                        break;
+                    }
+
+                    catch (Exception)
+                    {
+                        temps++;
+                        Sleep(1);
+                    }
+                }
+            }
+        }
+
+        public void WaitForAjax(IWebDriver driver, bool isAngular = true)
+        {
+            if (isAngular)
+            {
+                while (true)
+                {
+                    var ajaxIsComplete = !(bool)(driver as IJavaScriptExecutor).ExecuteScript("return window.IsAjaxCallPending");
+                    if (ajaxIsComplete)
+                        break;
+                    Thread.Sleep(100);
+                }
+            }
+            else
+            {
+                try
+                {
+                    while (true) // Handle timeout somewhere
+                    {
+                        var ajaxIsComplete = (bool)(driver as IJavaScriptExecutor).ExecuteScript("return jQuery.active == 0");
+                        if (ajaxIsComplete)
+                            break;
+                        Thread.Sleep(100);
+                    }
+                }
+                catch
+                {
+
+                    return;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Use function when snake ajax appears
+        /// </summary>
+        /// <param name="driver"></param>
+        /// <param name="timeOut"></param>
+        public void WaitForLibertyAjax(IWebDriver driver, int timeOut = 200)
+        {
+            string ajaxID = "divInformation";
+            WaitForElement(driver, SearchType.XPath, ajaxID, 5);
+            try
+            {
+                for (int i = 0; i < 10; i++)
+                {
+                    WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeOut));
+                    wait.Until(d => (bool)(d.PageSource.IndexOf(ajaxID) == -1));
+                }
+            }
+            catch
+            {
+                return;
+            }
+        }
+
+        public void WaitForAjaxToStart(IWebDriver driver, int timeOut = 60)
+        {
+            try
+            {
+                WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeOut));
+                wait.Until(d => (bool)(d.PageSource.IndexOf("") != -1));
+            }
+            catch
+            {
+                return;
+            }
+        }
+
+        internal void RefreshBrowser(IWebDriver driver, double sleepSeconds = 0)
+        {
+            string url = driver.Url;
+            driver.Navigate().Refresh();
+            Sleep(sleepSeconds);
+        }
+
+        internal void RefreshBrowserCtrlF5(IWebDriver driver, double sleepSeconds)
+        {
+            Actions actionObject = new Actions(driver);
+            actionObject.KeyDown(Keys.Control).SendKeys(Keys.F5).KeyUp(Keys.Control).Perform();
+            Sleep(sleepSeconds);
+        }
+
+        internal void RefreshBrowserCtrlF5(IWebDriver driver)
+        {
+            Actions actionObject = new Actions(driver);
+            actionObject.KeyDown(Keys.Control).SendKeys(Keys.F5).KeyUp(Keys.Control).Perform();
+        }
+
+        internal bool IsElementExists(IWebDriver driver, SearchType searchType, string sLocatorAttribute, int iSleep)
+        {
+            WaitForElement(driver, searchType, sLocatorAttribute, iSleep);
+            return IsElementExists(driver, searchType, sLocatorAttribute);
+        }
+
+        internal void WaitForWebElementTextChangedToReqValue(IWebDriver driver, SearchType searchType, string sLocatorAttribute, string reqText, int timeoutInSeconds = 30)
+        {
+            WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeoutInSeconds));
+            wait.Until<bool>((d) => FindElement(driver, searchType, sLocatorAttribute).Text == reqText);
+        }
+
+        internal void WaitForWebElementTextToChange(IWebDriver driver, SearchType searchType, string sLocatorAttribute, string reqText, int timeoutInSeconds = 30)
+        {
+            WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeoutInSeconds));
+            wait.Until<bool>((d) => FindElement(driver, searchType, sLocatorAttribute).Text != reqText);
+        }
+
+        internal bool IsAnyElementExists(IWebDriver driver, SearchType searchType, string sLocatorAttribute, int iSleep)
+        {
+            WaitForElement(driver, searchType, sLocatorAttribute, iSleep);
+            IEnumerable<IWebElement> els = FindElements(driver, searchType, sLocatorAttribute);
+            if (els.Any(el => el.Displayed))
+            {
+                return true;
+            }
+            return false;
+        }
+
+        internal bool IsElementExists(IWebDriver driver, SearchType searchType, string sLocatorAttribute)
+        {
+            try
+            {
+                IEnumerable<IWebElement> els = FindElements(driver, searchType, sLocatorAttribute);
+                if (els.Count() == 0)
+                    return false;
+                foreach (IWebElement el in els)
+                {
+                    if (el.Displayed)
+                        return true;
+                }
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        internal void Sleep(double seconds)
+        {
+            Thread.Sleep(TimeSpan.FromSeconds(seconds));
+        }
+
+
+        internal void WaitForCertainValueInDropListToLoad(IWebElement element, string value, int selectNum = 0)
+        {
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+            TimeSpan ts = new TimeSpan();
+            bool DDListLoaded = false;
+            if (!DDListLoaded)
+            {
+                do
+                {
+                    try
+                    {
+                        string Xpath = "..//select";
+                        IWebElement el;
+                        ReadOnlyCollection<IWebElement> elements = element.FindElements(By.XPath(Xpath));
+                        el = elements[selectNum];
+                        SelectElement selectElement = new SelectElement(el);
+                        List<IWebElement> li = new List<IWebElement>();
+                        li.AddRange(selectElement.Options);
+                        foreach (IWebElement option in li)
+                        {
+                            if (option.GetAttribute("value") == value)
+                            {
+                                DDListLoaded = true;
+                                break;
+                            }
+                        }
+                        ts = stopwatch.Elapsed;
+                        if (ts.Minutes > 1)
+                        {
+                            break;
+                        }
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+                } while (!DDListLoaded);
+            }
+        }
+
+        internal void WaitForDropListToLoad(IWebElement element, int selectNum = 0)
+        {
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+            TimeSpan ts = new TimeSpan();
+            bool DDListLoaded = false;
+            if (!DDListLoaded)
+            {
+                do
+                {
+                    try
+                    {
+                        ts = stopwatch.Elapsed;
+                        string Xpath = ".//select";
+                        IWebElement el;
+
+                        ReadOnlyCollection<IWebElement> elements = element.FindElements(By.XPath(Xpath));
+                        el = elements[selectNum];
+                        SelectElement selectElement = new SelectElement(el);
+                        List<IWebElement> li = new List<IWebElement>();
+                        li.AddRange(selectElement.Options);
+
+                        if (li.Count > 2)
+                        {
+                            DDListLoaded = true;
+                        }
+                        else if (li.Count == 2 && li.Any(v => v.GetAttribute("value") != "Select..." && v.GetAttribute("value") != string.Empty && v.GetAttribute("value") != null))
+                        {
+                            DDListLoaded = true;
+                        }
+                        if (ts.Minutes > 1)
+                        {
+                            break;
+                        }
+                    }
+                    catch
+                    {
+                        if (ts.Minutes < 1)
+                            continue;
+                        break;
+                    }
+                } while (!DDListLoaded);
+            }
+        }
+
+        internal void SelectFromNotAngularDropListByOptionNumber(IWebElement element, int order)
+        {
+            SelectElement selectElement = new SelectElement(element);
+            selectElement.SelectByIndex(order);
+        }
+
+        internal void SelectFromNotAngularDropList(IWebDriver driver, IWebElement element, string sValue)
+        {
+            SelectElement selectElement = new SelectElement(element);
+            // select by value
+            selectElement.SelectByValue(sValue);
+            // select by text
+            //selectElement.SelectByText("");
+        }
+
+        internal void SelectFromDropList(IWebDriver driver, IWebElement element, string sValue, bool clickArrow = true, string tag = "div", bool waitForDropList = false, bool insertText = false, int divOrder = 0)
+        {
+            if (clickArrow)
+            {
+                ClickDDArrow(element, driver, waitForDropList, divOrder);
+            }
+            if (!insertText)
+            {
+                string xPath = string.Format("...", tag, sValue);
+                //WaitForElement(driver, SearchType.XPath, xPath, 100);
+
+                if (!WaitForElement(driver, SearchType.XPath, xPath, 100))
+                {
+                    ClickDDArrow(element, driver, waitForDropList, divOrder);
+                    WaitForElement(driver, SearchType.XPath, xPath, 100);
+                }
+
+                IWebElement ddlElement = FindElement(driver, SearchType.XPath, xPath);
+
+                MouseOver(driver, ddlElement);
+                ddlElement.Click();
+            }
+        }
+
+        internal void SelectFromDropListNew(IWebElement element, IWebDriver driver, string sValue, bool clickArrow = true, string tag = "div", bool waitForDropList = false, bool insertText = false, int divOrder = 0)
+        {
+            if (clickArrow)
+            {
+                ClickDDArrow(element, driver, waitForDropList, divOrder);
+            }
+            if (!insertText)
+            {
+                string xPath = string.Format("//..//{0}/span[text()='{1}']", tag, sValue);
+
+                if (!WaitForElement(driver, SearchType.XPath, xPath, 100))
+                {
+                    ClickDDArrow(element, driver, waitForDropList, divOrder);
+                    WaitForElement(driver, SearchType.XPath, xPath, 100);
+                }
+
+                IWebElement ddlElement = FindElement(driver, SearchType.XPath, xPath);
+
+                MouseOver(driver, ddlElement);
+                ddlElement.Click();
+            }
+        }
+
+        internal void SelectMultiSelectFromDropList(IWebDriver driver, IWebElement element, string[] sValues, bool clearDirtyFields = false)
+        {
+            ClickMultiselectDDArrow(element, driver);
+            if (clearDirtyFields)
+            {
+                FindElements(driver, SearchType.XPath, "//...").ToList().ForEach(p => { ClickElementOld(p, driver); });
+            }
+            foreach (string value in sValues)
+            {
+                string xpath = string.Format("//...", value);
+                IWebElement el = FindElement(driver, SearchType.XPath, xpath);
+                ClickElementOld(el, driver);
+            }
+            ClickMultiselectDDArrow(element, driver);
+
+        }
+
+        internal void SelectFromDropListWithWaiting(IWebDriver driver, IWebElement element, string sValue, bool clickArrow = true, string tag = "div")
+        {
+            if (clickArrow)
+            {
+                ClickDDArrow(element, driver);
+            }
+            string xPath = string.Format("//...", tag, sValue);
+            Thread.Sleep(TimeSpan.FromSeconds(1));
+            WaitForElement(driver, SearchType.XPath, xPath, 100);
+
+            IWebElement ddlElement = FindElement(driver, SearchType.XPath, xPath);
+            MouseOver(driver, ddlElement);
+            Thread.Sleep(TimeSpan.FromSeconds(5));
+            ddlElement.Click();
+        }
+
+        internal void ClickMultiselectDDArrow(IWebElement element, IWebDriver driver)
+        {
+            IWebElement DDArrow = element.FindElement(By.XPath("//..."));
+            ClickElementOld(DDArrow, driver);
+        }
+
+        internal void SelectFromDropList(IWebDriver driver, IWebElement element, int yearDelta)
+        {
+            ClickDDArrow(element, driver);
+            string xPath = string.Format("//div[text()='{0}']", new CommonFunctions().GetYearDelta(yearDelta).ToString());
+            IWebElement ddlElement = FindElement(driver, SearchType.XPath, xPath);
+            ddlElement.Click();
+        }
+
+        internal void SelectFromDropListByEnumValue<T1>(IWebDriver driver, IWebElement element, T1 enumValue)
+        {
+            if (!typeof(T1).IsEnum)
+            {
+                throw new InvalidCastException("enumValue must be of Enum Type");
+            }
+            ClickDDArrow(element, driver);
+
+            string sValue = GetDDTextByValue(element, enumValue);
+            string xPath = string.Format("//div[text()='{0}']", sValue);
+            IWebElement ddlElement = FindElement(driver, SearchType.XPath, xPath);
+            ddlElement.Click();
+        }
+
+        internal string GetTooltipText(IWebDriver driver, IWebElement element, bool checkThePoints = true, string className = "tooltip-inner")
+        {
+            if ((element.Text.IndexOf("...") != -1 && checkThePoints) || !checkThePoints)
+            {
+                Actions builder = new Actions(driver);
+                builder.ClickAndHold(element).Perform();
+                Thread.Sleep(TimeSpan.FromSeconds(0.5));
+                IWebElement MessageElement;
+                string errorMessage;
+                try
+                {
+                    IReadOnlyCollection<IWebElement> elements = driver.FindElements(By.ClassName(className));
+                    MessageElement = elements.FirstOrDefault(d => d.Displayed);
+                    errorMessage = MessageElement.Text;
+                }
+                catch (Exception)
+                {
+
+                    return element.Text;
+                }
+
+                builder.Release(element).Perform();
+                return errorMessage;
+            }
+            return element.Text;
+        }
+
+        public bool WasOpenedInAnotherWindow(IWebDriver driver, int numOfWindowsBefore, string partialURL)
+        {
+            WaitForUrl(driver, partialURL);
+            int numberOfWindows = GetNumberOfHandles(driver);
+            if (numberOfWindows > numOfWindowsBefore)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        internal void SelectNewOpenedWindow(IWebDriver driver)
+        {
+            bool HandleSelected = false;
+            List<string> handles = driver.WindowHandles.ToList<string>();
+            for (int i = 0; i < handles.Count && !HandleSelected; i++)
+            {
+                driver.SwitchTo().Window(handles[i]);
+                if (driver.Url.ToLower() == "about:blank")
+                {
+                    HandleSelected = true;
+                }
+            }
+        }
+
+        internal bool SelectWindowByPartialURL(IWebDriver driver, string url, int numberOfHandles = 1)
+        {
+            bool HandleSelected = false;
+            int actualNumberOfHandles = 0;
+            List<string> handles = driver.WindowHandles.ToList<string>();
+            for (int i = 0; i < handles.Count && !HandleSelected; i++)
+            {
+                driver.SwitchTo().Window(handles[i]);
+                if (driver.Url.ToLower().Contains(url.ToLower()))
+                {
+                    actualNumberOfHandles++;
+                    if (actualNumberOfHandles == numberOfHandles)
+                    {
+                        HandleSelected = true;
+                    }
+                }
+            }
+            return HandleSelected;
+        }
+
+        internal void SelectWindowByText(IWebDriver driver, string pattern)
+        {
+            bool HandleSelected = false;
+            List<string> handles = driver.WindowHandles.ToList<string>();
+            for (int i = 0; i < handles.Count && !HandleSelected; i++)
+            {
+                driver.SwitchTo().Window(handles[i]);
+                if (driver.PageSource.Contains(pattern))
+                {
+                    HandleSelected = true;
+                }
+            }
+        }
+
+        internal bool HandleWithPartialURLexists(IWebDriver driver, string PartialURL, int numOfHandles = 1)
+        {
+            string currentHandle = driver.CurrentWindowHandle;
+            try
+            {
+                int actualNumOfHandles = 0;
+                List<string> handles = driver.WindowHandles.ToList<string>();
+                for (int i = 0; i < handles.Count; i++)
+                {
+                    try
+                    {
+                        driver.SwitchTo().Window(handles[i]);
+                        if (driver.Url.ToLower().Contains(PartialURL.ToLower()))
+                        {
+                            actualNumOfHandles++;
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+                if (actualNumOfHandles == numOfHandles)
+                {
+                    return true;
+                }
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+            finally
+            {
+                driver.SwitchTo().Window(currentHandle);
+            }
+        }
+
+        internal int GetNumberOfHandles(IWebDriver driver)
+        {
+            return driver.WindowHandles.Count;
+        }
+              
+        internal StringBuilder WaitForUrl(IWebDriver driver, string url, int numberOfHandles = 1, int waitTimeInSeconds = 120)
+        {
+            StringBuilder error = new StringBuilder();
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+            TimeSpan ts = new TimeSpan();
+            while (!HandleWithPartialURLexists(driver, url, numberOfHandles))
+            {
+                ts = stopwatch.Elapsed;
+                Sleep(0.5);
+                if (ts.TotalSeconds > waitTimeInSeconds)
+                {
+                    stopwatch.Stop();
+                    return error.Append("Could not manage to load the file");
+                }
+            }
+            Sleep(0.5);
+            stopwatch.Stop();
+            return error;
+        }
+
+        internal void WaitUntilPageLoads(IWebDriver driver, int count = 0)
+        {
+            WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(100));
+            try
+            {
+                count++;
+                wait.Until(d => (bool)(d as IJavaScriptExecutor).ExecuteScript("return document.readyState").Equals("complete"));
+            }
+            catch
+            {
+                if (count < 3)
+                {
+                    driver.Navigate().Refresh();
+                    WaitUntilPageLoads(driver, count);
+                }
+                else
+                {
+                    return;
+                }
+            }
+        }
+
+        internal int[] GetLocation(IWebElement Element)
+        {
+
+            int[] Location = { Element.Location.X, Element.Location.Y };
+            return Location;
+        }
+
+        internal int[] GetSize(IWebElement Element)
+        {
+            int[] Size = { Element.Size.Height, Element.Size.Width };
+            return Size;
+        }
+
+        internal void MouseOver(IWebDriver driver, IWebElement element)
+        {
+
+            Actions actions = new Actions(driver);
+            actions.MoveToElement(element).Perform();
+        }
+        internal void WaitForFileWithGuidNameToDownload(IWebDriver driver, string fileType, bool deleteFile)
+        {
+            try
+            {
+                WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(60));
+                wait.Until(drv => new CommonFunctions().FileWithGuidNameExist(fileType, deleteFile));
+            }
+            catch
+            {
+                return;
+            }
+        }
+        public void SetText(IWebElement el, string value, bool clear = true)
+        {
+            if (clear)
+                el.Clear();
+
+            el.SendKeys(value);
+        }
+
+        public bool ExecuteActionUntill(IWebDriver driver, Func<bool> func, int timeOut = 60, bool throwExp = false, string errorMessage = "")
+        {
+            try
+            {
+                WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeOut));
+                wait.Until((x) =>
+                {
+                    try
+                    {
+                        return func();
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+
+                });
+            }
+            catch (Exception e)
+            {
+                if (throwExp)
+                {
+                    throw new Exception(errorMessage + " " + e.Message);
+                }
+
+                return false;
+            }
+            return true;
+        }
+
+
+        internal void WaitForFileDownload(IWebDriver driver, string FileType, string FileName, int timeInSeconds = 120)
+        {
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+            TimeSpan ts = new TimeSpan();
+            while (!new CommonFunctions().FileExist(FileType, FileName, false))
+            {
+                ts = stopwatch.Elapsed;
+                Sleep(0.5);
+                if (ts.TotalSeconds > timeInSeconds)
+                {
+                    stopwatch.Stop();
+                    break;
+                }
+            }
+            Sleep(0.5);
+            stopwatch.Stop();
+        }
+
+        internal void ReturnToMainFrame(IWebDriver driver)
+        {
+            driver.SwitchTo().DefaultContent();
+        }
+
+        internal void SelectFrame(IWebDriver driver, IWebElement frameElement)
+        {
+            driver.SwitchTo().DefaultContent();
+            driver.SwitchTo().Frame(frameElement);
+        }
+
+        internal void ClickElementOld(IWebElement el, IWebDriver driver, bool useJavaScript = true, string details = "")
+        {
+            if (!useJavaScript)
+            {
+                el.Click();
+            }
+
+            else
+                try
+                {
+                    ((IJavaScriptExecutor)driver).ExecuteScript("return arguments[0].click()", el);
+                }
+                catch
+                {
+                    if (IsElementExists(driver, el))
+                    {
+                        el.Click();
+                    }
+                }
+        }
+
+        internal void ScrollToBottom(IWebDriver driver)
+        {
+            ((IJavaScriptExecutor)driver).ExecuteScript("window.scrollTo(0, document.body.scrollHeight)");
+        }
+
+        internal void ScrollToTop(IWebDriver driver)
+        {
+            ((IJavaScriptExecutor)driver).ExecuteScript("window.scrollTo(0,0)");
+        }
+
+        internal bool CheckElementLocation(IWebElement leftLimit, IWebElement el, IWebElement rightLimit)
+        {
+            Point leftLocation = leftLimit.Location;
+            Point elLocation = el.Location;
+            Point rightLocation = rightLimit.Location;
+
+            return leftLocation.X < elLocation.X && elLocation.X < rightLocation.X;
+        }
+
+        internal void CleanManually(IWebElement webElement)
+        {
+            webElement.SendKeys(Keys.Control + "a");
+            webElement.SendKeys(Keys.Delete);
+        }
+
+        public void HoverUntillVissble(IWebDriver driver, IWebElement hoveredEl, IWebElement el)
+        {
+            WaitForElement(driver, hoveredEl, 10);
+            ExecuteActionUntill(driver, () =>
+            {
+                MouseOver(driver, hoveredEl);
+                if (WaitForElement(driver, el, 1))
+                {
+                    el.Click();
+                    return true;
+                }
+
+                MouseOver(driver, FindElement(driver, SearchType.TagName, "body"));
+                return false;
+            }
+            , 30, true, "Failed to click on element.");
+        }
+
+        internal int GetNumberOfHandlersWithPartialURL(string url, IWebDriver driver)
+        {
+            int count = 0;
+            Thread.Sleep(TimeSpan.FromSeconds(5));
+            List<string> handles = driver.WindowHandles.ToList<string>();
+            for (int i = 0; i < handles.Count; i++)
+            {
+                driver.SwitchTo().Window(handles[i]);
+                if (driver.Url.ToLower().Contains(url.ToLower()))
+                {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        internal void PasteTextInFieled(IWebDriver driver, string text, IWebElement el)
+        {
+            el.Click();
+            el.SendKeys(text);
+            el.SendKeys(text.Last().ToString());
+        }
+
+        internal void SetTextInFieldWithoutClick(IWebElement webElement, string value)
+        {
+            char[] valArr = value.ToArray();
+            foreach (char val in valArr)
+            {
+                webElement.SendKeys(val.ToString());
+            }
+            webElement.SendKeys(Keys.Tab);
+        }
+
+        internal string GetValueFromDDField(IWebElement el)
+        {
+            return el.FindElement(By.XPath("descendant::a")).Text;
+        }
+
+        internal string GetValueFromTextField(IWebElement el)
+        {
+            return el.GetAttribute("value");
+        }
+
+        internal void RunJavascript(IWebDriver driver, string function)
+        {
+            ((IJavaScriptExecutor)driver).ExecuteScript(function);
+        }
+
+        public bool WaitForUrlUpdate(IWebDriver driver, string reqUrl, int timeOut = 60, bool throwEx = false)
+        {
+            reqUrl = new CommonFunctions().ConvertStringToLower(reqUrl);
+            WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeOut));
+            try
+            {
+                wait.Until(d =>
+                {
+                    return d.Url.ToLower().Contains(reqUrl);
+                });
+            }
+            catch
+            {
+                if (throwEx)
+                {
+                    throw new Exception(string.Format("Did not reach the expected page: {0}", reqUrl));
+                }
+
+                return false;
+            }
+
+            return true;
+        }
+
+        internal bool IsClickable(IWebDriver driver, IWebElement el)
+        {
+            WaitForElement(driver, el);
+            if (el.Enabled && el.Displayed)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        public bool WaitForUrlChange(IWebDriver driver, string url, bool throwEx = false, int timeOut = 60)
+        {
+            WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeOut));
+            try
+            {
+                wait.Until(d =>
+                {
+                    return d.Url.ToLower() != url;
+                });
+            }
+            catch
+            {
+                if (throwEx)
+                {
+                    throw new Exception(string.Format("Url didn't change from url: {0}", url));
+                }
+
+                return false;
+            }
+
+            return true;
+        }
+
+        public void WaitForTextBox(IWebDriver driver, IWebElement textBox, int time = 30)
+        {
+            WaitForElement(driver, textBox, time);
+            try
+            {
+                ExecuteActionUntill(driver, () =>
+                {
+                    try
+                    {
+                        textBox.SendKeys("a");
+                        return textBox.GetAttribute("value") == "a";
+                    }
+                    catch
+                    {
+                        textBox.Clear();
+                        return false;
+                    }
+                }
+                , 30);
+            }
+            catch
+            {
+                throw new Exception("Text box was not loaded");
+            }
+
+            textBox.Clear();
+        }
+
+
+    public enum SearchType
+    {
+        Id,
+        Class,
+        TagName,
+        XPath,
+        Name,
+        LinkText,
+        PartialLinkText,
+        Value,
+        CssSelector
+    }
 }
